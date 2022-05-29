@@ -1,0 +1,62 @@
+#include <iostream>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string>
+#include <cstdio>
+#include <errno.h>
+#include "ServerSocket.h"
+#include "SocketException.h"
+#include "ocilib.hpp"
+#include "DBWriter.h"
+
+using namespace ocilib;
+using namespace std;
+
+const int MaxThreads = 50;
+const int MaxConnnections = 100;
+
+
+int main(void)
+{
+    try
+    {
+        Environment::Initialize(Environment::Threaded);
+
+        Pool pool("192.168.1.88/yunhuandb", "kafkatest", "kafkatest", Pool::ConnectionPool,10,MaxConnnections,10);
+
+
+        try
+        {
+            // Create the socket
+            ServerSocket server ( 30000 );
+            cout << "- Runing on port 30000..." << endl;
+
+            while ( true )
+            {
+
+                //ServerSocket new_sock;
+                DBWriter *dbwriter = new  DBWriter(pool);
+                server.accept ( dbwriter->dbSocket );
+                pthread_create(&dbwriter->pthread, nullptr, &DBWriter::runStatic, (void*)dbwriter);
+                pthread_detach(dbwriter->pthread);
+
+            }
+        }
+         catch ( SocketException& e )
+        {
+            std::cout << "Exception was caught:" << e.description() << "\nExiting.\n";
+        }
+
+    }
+    catch (std::exception &ex)
+    {
+        std::cout << ex.what() << std::endl;
+    }
+
+    Environment::Cleanup();
+
+    return EXIT_SUCCESS;
+}
